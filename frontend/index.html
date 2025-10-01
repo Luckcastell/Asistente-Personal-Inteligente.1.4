@@ -3,36 +3,149 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Suriel | Asistente de Base Privada</title>
-    <link rel="stylesheet" href="styles.css">
-    <!-- Ícono de chat para mejor UX -->
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%232a6f2e' d='M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2m-2 12H6v-2h12zm0-3H6V9h12zm0-3H6V6h12z'/%3E%3C/svg%3E">
+    <title>Suriel | Asistente Personal Inteligente</title>
+    <!-- Link para estilos.css, que ya tenías -->
+    <link rel="stylesheet" href="styles.css"> 
+    <!-- Fuente Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Estilos agregados para mejor estética y responsive */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8; /* Un color de fondo más suave */
+            display: flex;
+            justify-content: center;
+            align-items: flex-start; /* Alineado arriba */
+            min-height: 100vh;
+            padding: 20px;
+            margin: 0;
+        }
+        .chat-container {
+            background: #ffffff;
+            width: 100%;
+            max-width: 500px; /* Ancho máximo para desktop */
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        h1 {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #1e3a8a;
+            font-size: 1.8rem;
+            border-bottom: 2px solid #eff6ff;
+            padding-bottom: 10px;
+        }
+        .upload-area {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            background-color: #f9fafb;
+        }
+        .upload-area button {
+            background-color: #3b82f6;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 6px;
+            transition: background-color 0.2s;
+            font-weight: 600;
+        }
+        .upload-area button:hover {
+            background-color: #2563eb;
+        }
+        .chat-box {
+            height: 400px; /* Mayor altura para el historial */
+            overflow-y: auto;
+            border: 1px solid #d1d5db;
+            background-color: #ffffff;
+            padding: 15px;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .message {
+            padding: 10px;
+            border-radius: 8px;
+            max-width: 80%;
+        }
+        .user {
+            align-self: flex-end;
+            background-color: #3b82f6;
+            color: white;
+            text-align: right;
+        }
+        .bot {
+            align-self: flex-start;
+            background-color: #e0f2fe;
+            color: #1e3a8a;
+            text-align: left;
+        }
+        #upload-status {
+            font-size: 0.9rem;
+            color: #10b981;
+        }
+        .input-container {
+            display: flex;
+            gap: 8px;
+        }
+        .input-container input[type="text"] {
+            flex-grow: 1;
+            padding: 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+        }
+        .input-container button {
+            background-color: #10b981;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            transition: background-color 0.2s;
+        }
+        .input-container button:hover {
+            background-color: #059669;
+        }
+        @media (max-width: 600px) {
+            .chat-container {
+                padding: 15px;
+                margin: 0;
+                border-radius: 0;
+                box-shadow: none;
+            }
+            h1 {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
 </head>
 <body>
     <div class="chat-container">
         <h1>🤖 Suriel (Base Privada)</h1>
 
-        <!-- Sección de Carga de Archivos -->
-        <div class="upload-section">
-            <label for="pdf-file" class="file-label">Cargar Documento PDF:</label>
-            <input type="file" id="pdf-file" accept="application/pdf">
-            <button onclick="uploadPDF()">Subir PDF</button>
-        </div>
-        <p id="upload-status" class="status-message"></p>
-
-        <!-- Caja de Conversación -->
-        <div id="chat-box" class="chat-box">
-            <div class="message bot">
-                <strong>Suriel:</strong> ¡Hola! Soy Suriel, tu asistente de conocimiento privado. Subí un PDF para empezar a consultarle.
-            </div>
+        <div class="upload-area">
+        <h2>1. Cargar Base de Conocimiento</h2>
+        <input type="file" id="archivo-pdf" accept="application/pdf" class="w-full p-2 border border-gray-300 rounded-md">
+        <button onclick="subirPDF()" id="btn-subir">Subir PDF e Indexar</button>
+        <p id="estado-subida" class="text-sm font-medium"></p>
         </div>
         
-        <!-- Entrada de Usuario -->
+        <div id="chat-box" class="chat-box">
+        <div class="message bot"><strong>Suriel:</strong> ¡Hola! Soy Suriel, tu asistente personal. Cargá tus documentos PDF para que pueda empezar a responder tus preguntas basadas en ellos.</div>
+        </div>
+        
         <div class="input-container">
-        <input id="user-input" type="text" placeholder="Haz una pregunta sobre tus documentos..." onkeypress="if(event.key === 'Enter') sendMessage()">
-        <button onclick="sendMessage()">Enviar</button>
+        <input id="entrada-usuario" type="text" placeholder="Hacé una pregunta sobre tus documentos..." onkeydown="if(event.key === 'Enter') enviarMensaje()">
+        <button onclick="enviarMensaje()">Enviar</button>
         </div>
     </div>
+
     <script src="script.js"></script>
 </body>
 </html>

@@ -1,123 +1,112 @@
-// URL base de la API de FastAPI
-const URL_API = "http://127.0.0.1:8000";
-
-// Elementos de la interfaz
-const entradaPDF = document.getElementById("pdf-file");
-const estadoCarga = document.getElementById("upload-status");
-const entradaUsuario = document.getElementById("user-input");
-const cajaChat = document.getElementById("chat-box");
-const botonEnviar = document.querySelector(".input-container button");
-const botonSubir = document.querySelector(".upload-section button");
+// URL base de nuestro servidor FastAPI
+const URL_BASE_API = "http://127.0.0.1:8000";
 
 /**
- * Muestra un mensaje de estado en la interfaz.
+ * Muestra un mensaje temporal en la interfaz de chat (simulando un alert, pero sin usar alert()).
  * @param {string} mensaje - El texto a mostrar.
- * @param {('success'|'error'|'loading'|'')} tipo - El tipo de mensaje para aplicar estilos.
+ * @param {boolean} esError - Indica si es un mensaje de error (rojo) o éxito (verde).
  */
-function mostrarEstado(mensaje, tipo = '') {
-    estadoCarga.textContent = mensaje;
-    estadoCarga.className = `status-message status-${tipo}`;
+function mostrarMensajeEstado(mensaje, esError = false) {
+    const estadoElemento = document.getElementById("estado-subida");
+    estadoElemento.textContent = mensaje;
+    estadoElemento.style.color = esError ? '#dc2626' : '#10b981';
 }
 
 /**
- * Deshabilita o habilita los elementos de entrada para evitar clics múltiples.
- * @param {boolean} deshabilitar - true para deshabilitar, false para habilitar.
+ * Función para subir el archivo PDF al servidor e iniciar el proceso de indexación RAG.
  */
-function gestionarInteraccion(deshabilitar) {
-    entradaUsuario.disabled = deshabilitar;
-    botonEnviar.disabled = deshabilitar;
-    entradaPDF.disabled = deshabilitar;
-    botonSubir.disabled = deshabilitar;
-}
+async function subirPDF() {
+    const entradaArchivo = document.getElementById("archivo-pdf");
+    const botonSubir = document.getElementById("btn-subir");
 
-/**
- * Desplaza automáticamente la caja de chat al último mensaje.
- */
-function desplazarChatAbajo() {
-    cajaChat.scrollTop = cajaChat.scrollHeight;
-}
-
-/**
- * Sube el archivo PDF seleccionado al servidor y lo indexa.
- */
-async function uploadPDF() {
-    if (!entradaPDF.files.length) {
-        return mostrarEstado("🚨 Por favor, seleccioná un archivo PDF primero.", 'error');
+    if (!entradaArchivo.files.length) {
+        return mostrarMensajeEstado("⚠️ Por favor, seleccioná un archivo PDF antes de subir.", true);
     }
 
-    const archivo = entradaPDF.files[0];
-    const formData = new FormData();
-    formData.append("archivo", archivo); // El nombre debe coincidir con el backend 'archivo'
+    const archivo = entradaArchivo.files[0];
+    const datosFormulario = new FormData();
+    datosFormulario.append("file", archivo);
 
-    mostrarEstado(`⏳ Procesando "${archivo.name}"... Esto puede tardar unos segundos.`, 'loading');
-    gestionarInteraccion(true);
-
-    try {
-        const res = await fetch(`${URL_API}/upload`, { 
-            method: "POST", 
-            body: formData 
-        });
-        const datos = await res.json();
-
-        if (res.ok) {
-            mostrarEstado(`✅ ${datos.mensaje}`, 'success');
-        } else {
-            mostrarEstado(`❌ Error al subir: ${datos.detail || "Verificá el servidor."}`, 'error');
-        }
-    } catch (error) {
-        console.error("Error de conexión:", error);
-        mostrarEstado("❌ No se pudo conectar con el servidor. ¿Está el backend corriendo?", 'error');
-    } finally {
-        gestionarInteraccion(false);
-    }
-}
-
-/**
- * Envía el mensaje del usuario al servidor y muestra la respuesta de Suriel.
- */
-async function sendMessage() {
-    const mensaje = entradaUsuario.value.trim();
-    if (!mensaje) return;
-
-    // 1. Mostrar mensaje del usuario
-    cajaChat.innerHTML += `<div class="message user"><strong>Tú:</strong> ${mensaje}</div>`;
-    entradaUsuario.value = "";
-    desplazarChatAbajo();
-
-    // 2. Mostrar mensaje de carga de Suriel
-    const idMensajeCarga = "loading-" + Date.now();
-    cajaChat.innerHTML += `<div id="${idMensajeCarga}" class="message bot loading-message"><strong>Suriel:</strong> Escribiendo...</div>`;
-    desplazarChatAbajo();
-    gestionarInteraccion(true);
+    mostrarMensajeEstado(`Subiendo e indexando '${archivo.name}'...`, false);
+    botonSubir.disabled = true;
 
     try {
-        const res = await fetch(`${URL_API}/chat`, {
+        const respuesta = await fetch(`${URL_BASE_API}/upload`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ mensaje: mensaje })
+            body: datosFormulario,
         });
         
-        const datos = await res.json();
-        const elementoMensajeCarga = document.getElementById(idMensajeCarga);
+        const datos = await respuesta.json();
 
-        if (res.ok) {
-            // 3. Reemplazar mensaje de carga con la respuesta final
-            elementoMensajeCarga.className = 'message bot';
-            elementoMensajeCarga.innerHTML = `<strong>Suriel:</strong> ${datos.respuesta}`;
+        if (respuesta.ok) {
+            mostrarMensajeEstado(`✅ ${datos.mensaje}`, false);
         } else {
-            // 3. Mostrar error de servidor
-            elementoMensajeCarga.className = 'message bot status-error';
-            elementoMensajeCarga.innerHTML = `<strong>Suriel (Error):</strong> Error interno (${datos.detail || "revisá la consola del backend"})`;
+            mostrarMensajeEstado(`❌ Error al subir: ${datos.detail || datos.error || "Error desconocido"}`, true);
+        }
+    } catch (error) {
+        mostrarMensajeEstado(`❌ Error de conexión con el servidor: ${error.message}. ¿Está el backend iniciado?`, true);
+    } finally {
+        botonSubir.disabled = false;
+    }
+}
+
+/**
+ * Función para enviar el mensaje del usuario al servidor y recibir la respuesta de Suriel.
+ */
+async function enviarMensaje() {
+    const entrada = document.getElementById("entrada-usuario");
+    const cajaChat = document.getElementById("chat-box");
+    const mensajeUsuario = entrada.value.trim();
+    
+    if (!mensajeUsuario) return;
+
+    // 1. Mostrar mensaje del usuario
+    cajaChat.innerHTML += `<div class="message user"><strong>Tú:</strong> ${mensajeUsuario}</div>`;
+    entrada.value = "";
+    
+    // 2. Mostrar indicador de carga de Suriel
+    const idCarga = "carga-suriel";
+    cajaChat.innerHTML += `<div id="${idCarga}" class="message bot"><strong>Suriel:</strong> ⏳ Pensando...</div>`;
+    cajaChat.scrollTop = cajaChat.scrollHeight;
+
+    try {
+        const respuesta = await fetch(`${URL_BASE_API}/chat`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mensaje: mensajeUsuario })
+        });
+        
+        const datos = await respuesta.json();
+        
+        // 3. Reemplazar indicador de carga por la respuesta
+        const elementoCarga = document.getElementById(idCarga);
+        if (elementoCarga) {
+            elementoCarga.remove(); 
         }
 
+        let respuestaFinal;
+        if (respuesta.ok) {
+            // Usamos 'respuesta' porque así lo nombramos en el backend (main.py)
+            respuestaFinal = datos.respuesta || "Suriel no pudo generar una respuesta.";
+        } else {
+            // Manejo de errores del servidor FastAPI (ej: 500)
+            respuestaFinal = `Error del servidor: ${datos.detail || "No se pudo conectar."}`;
+        }
+
+        cajaChat.innerHTML += `<div class="message bot"><strong>Suriel:</strong> ${respuestaFinal}</div>`;
+
+
     } catch (error) {
-        console.error("Error de conexión:", error);
-        const elementoMensajeCarga = document.getElementById(idMensajeCarga);
-        elementoMensajeCarga.className = 'message bot status-error';
-        elementoMensajeCarga.innerHTML = `<strong>Suriel (Error):</strong> No se pudo conectar con el servidor.`;
+        console.error("Error de red al intentar chatear:", error);
+        // Mostrar mensaje de error de conexión en el chat
+        const elementoCarga = document.getElementById(idCarga);
+        if (elementoCarga) {
+            elementoCarga.remove(); 
+        }
+        cajaChat.innerHTML += `<div class="message bot"><strong>Suriel:</strong> ❌ Error de conexión. Asegurate de que el servidor (backend) esté corriendo.</div>`;
+
     } finally {
-        // 4. Habilitar interacción y desplazar
-        gestionarInteraccion(false);
-        desplazarChatAbajo();
+        // 4. Asegurar que el chat scrollee al final
+        cajaChat.scrollTop = cajaChat.scrollHeight;
     }
 }

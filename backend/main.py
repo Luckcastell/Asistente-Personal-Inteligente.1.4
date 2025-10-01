@@ -4,174 +4,168 @@ from pydantic import BaseModel
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
 from langchain_community.document_loaders import PyPDFLoader
-# Usamos HuggingFaceEmbeddings para convertir el texto en vectores (embeddings)
-from langchain_community.embeddings import HuggingFaceEmbeddings 
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from groq import Groq
 import os, shutil
 from dotenv import load_dotenv
-import json # Necesario para parsear el error de Groq
 
-# Cargar variables de entorno del archivo .env
+# Cargar variables de entorno (como la API Key de Groq)
 load_dotenv()
 
-# Inicializar cliente de Groq con la clave de entorno
-clave_api = os.getenv("GROQ_API_KEY")
-if not clave_api:
-    # Si la clave falta, detenemos la app al inicio para evitar errores
-    raise Exception("La variable de entorno GROQ_API_KEY no está configurada.")
-cliente_groq = Groq(api_key=clave_api)
+# --- Configuración y Inicialización ---
 
-# Inicializar la aplicación FastAPI
-app = FastAPI(title="Suriel Base Privada API")
+# Inicializar cliente de Groq (para el modelo de lenguaje)
+CLAVE_GROQ = os.getenv("GROQ_API_KEY")
+if not CLAVE_GROQ:
+    # Levantar una excepción si la clave no está configurada, crucial para la ejecución
+    raise ValueError("GROQ_API_KEY no encontrada. Por favor, revisá el archivo .env")
 
-# Configuración de CORS: permite solicitudes desde cualquier origen (*) para el desarrollo
+cliente_llm = Groq(api_key=CLAVE_GROQ)
+
+# Directorios para archivos y base de datos de vectores
+DIRECTORIO_SUBIDAS = "uploads"
+DIRECTORIO_DB = "vector_db"
+
+# Crear directorios si no existen
+os.makedirs(DIRECTORIO_SUBIDAS, exist_ok=True)
+os.makedirs(DIRECTORIO_DB, exist_ok=True)
+
+# Inicializar FastAP
+app = FastAPI(title="Backend Suriel RAG")
+
+# Configurar CORS (necesario para que el frontend pueda comunicarse)
 app.add_middleware(
     CORSMiddleware,
+    # Permitir cualquier origen durante el desarrollo. En producción, se debería restringir
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Definición de directorios para la persistencia
-RUTA_SUBIDA = "uploads"
-RUTA_DB = "vector_db"
-
-# Crear directorios si no existen
-os.makedirs(RUTA_SUBIDA, exist_ok=True)
-os.makedirs(RUTA_DB, exist_ok=True)
-
-# Inicializar el modelo de embeddings
-# Modelo: sentence-transformers/all-MiniLM-L6-v2, balance de velocidad y precisión
+# Inicializar Embeddings (función para convertir texto a vectores)
+# Se usa un modelo local de HuggingFace para evitar depender de APIs de embeddings
 embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
-# Inicializar o cargar la base de datos vectorial ChromaDB
-# persist_directory asegura que la base de conocimiento se mantenga guardada
-almacen_vectorial = Chroma(
-    persist_directory=RUTA_DB, 
+# Inicializar ChromaDB (la base de datos de vectores) y cargar la base persistente
+vectorstore = Chroma(
+    persist_directory=DIRECTORIO_DB,
     embedding_function=embeddings
 )
 
-# Modelo Pydantic para validar la solicitud de chat
+# Clase de Pydantic para validar la solicitud de chat
 class SolicitudChat(BaseModel):
+    """Define la estructura de datos esperada para la solicitud de chat."""
     mensaje: str
 
-# Función auxiliar para agregar el contenido de un PDF
-def agregar_pdf_a_almacen(ruta_archivo: str):
+# --- Funciones de Lógica RAG ---
+
+def agregar_pdf_a_vectorstore(ruta_archivo: str):
     """
-    Carga, divide y guarda el contenido de un PDF en el almacén vectorial Chroma.
-    
-    El POR QUÉ: Dividimos el texto para que el modelo de IA pueda recibir
-    fragmentos pequeños y muy relevantes en lugar del PDF completo.
+    Procesa un archivo PDF, lo divide en trozos y los indexa en la base de vectores.
+    :param ruta_archivo: La ruta completa al archivo PDF a procesar.
     """
     try:
-        # 1. Cargar el documento PDF
+        # Cargar el documento PDF
         cargador = PyPDFLoader(ruta_archivo)
         documentos = cargador.load()
-        
-        # 2. Dividir el texto en fragmentos (chunks) más pequeños
-        divisor_texto = RecursiveCharacterTextSplitter(
-            chunk_size=1000, 
-            chunk_overlap=100 # Superposición para mantener el contexto entre fragmentos
-        )
-        fragmentos = divisor_texto.split_documents(documentos)
-        
-        # 3. Almacenar los fragmentos en la base de datos vectorial
-        almacen_vectorial.add_documents(fragmentos)
-        almacen_vectorial.persist()
-        
+
+        # Dividir el texto en trozos para la búsqueda precisa
+        # Un tamaño de 1000 y un solapamiento de 100 son comunes para RAG
+        divisor_texto = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+        trozos = divisor_texto.split_documents(documentos)
+
+        # Agregar los trozos a la tienda de vectores
+        vectorstore.add_documents(trozos)
+
+        # Persistir los cambios en el disco para que estén disponibles después de reiniciar
+        vectorstore.persist()
+        return True
     except Exception as e:
-        # Si algo falla en el procesamiento (por ej. PDF corrupto),
-        # relanzamos el error para que FastAPI lo maneje.
-        raise e
+        print(f"Error al procesar PDF {ruta_archivo}: {e}")
+        return False
+
+# --- Rutas de la API ---
 
 @app.post("/upload")
-async def subir_pdf(archivo: UploadFile = File(...)):
+# CAMBIO CLAVE: Cambiamos el nombre del parámetro de 'archivo' a 'file'
+# para que coincida con lo que envía el 'formData.append("file", ...)' del script.js
+async def subir_pdf(file: UploadFile = File(...)):
     """
-    Endpoint para subir un archivo PDF y agregarlo a la base de conocimiento (RAG).
+    Ruta para subir un archivo PDF, guardarlo temporalmente y luego indexarlo.
     """
-    if not archivo.filename.endswith(".pdf"):
+    # Usamos 'file' en lugar de 'archivo'
+    if file.content_type != "application/pdf":
         raise HTTPException(status_code=400, detail="Solo se permiten archivos PDF.")
-    
-    ruta_archivo = os.path.join(RUTA_SUBIDA, archivo.filename)
-    
-    try:
-        # 1. Guardar el archivo temporalmente en el sistema de archivos
-        with open(ruta_archivo, "wb") as buffer:
-            shutil.copyfileobj(archivo.file, buffer)
 
-        # 2. Procesar y agregar a la base de datos vectorial
-        agregar_pdf_a_almacen(ruta_archivo)
-        
-        # 3. Limpieza: Eliminar el archivo de la carpeta de subida después de procesar
-        if os.path.exists(ruta_archivo):
-                os.remove(ruta_archivo)
-                
-        return {"mensaje": f"PDF '{archivo.filename}' cargado y agregado al índice correctamente."}
-    
+    ruta_archivo = os.path.join(DIRECTORIO_SUBIDAS, file.filename)
+
+    try:
+        # Guardar el archivo temporalmente (usamos file.file)
+        with open(ruta_archivo, "wb") as f:
+            shutil.copyfileobj(file.file, f)
+
+        # Procesar el archivo y agregarlo a la base de vectores
+        if agregar_pdf_a_vectorstore(ruta_archivo):
+            # Eliminar el archivo temporal después de procesar
+            os.remove(ruta_archivo)
+            return {"mensaje": f"PDF '{file.filename}' cargado y agregado al índice."}
+        else:
+            raise HTTPException(status_code=500, detail="Error interno al procesar el PDF.")
+
     except Exception as e:
-        print(f"Error al procesar el archivo: {e}")
-        # Aseguramos la limpieza del archivo subido en caso de error
+        # En caso de error, aseguramos la limpieza del archivo temporal
         if os.path.exists(ruta_archivo):
             os.remove(ruta_archivo)
-        raise HTTPException(status_code=500, detail=f"Error interno al procesar el PDF: {e}")
+        print(f"Error en la ruta /upload: {e}")
+        raise HTTPException(status_code=500, detail=f"Ocurrió un error: {e}")
 
 @app.post("/chat")
 async def chat(solicitud: SolicitudChat):
     """
-    Endpoint para chatear. Usa la base de conocimiento para recuperar el contexto 
-    y Groq para generar una respuesta grounded (basada en el contexto).
+    Ruta para enviar un mensaje de chat, buscar contexto en la base de vectores y generar una respuesta.
     """
     try:
-        # 1. Búsqueda de contexto: Encuentra los 3 fragmentos más relevantes (RAG)
-        # Esto reduce el universo de información que la IA tiene que considerar.
-        resultados = almacen_vectorial.similarity_search(solicitud.mensaje, k=3)
+        # Paso 1: Recuperación (Retrieval) - Buscar los 3 documentos más relevantes
+        resultados = vectorstore.similarity_search(solicitud.mensaje, k=3)
+        
+        # Unir el contenido de los documentos recuperados en una sola cadena de contexto
         contexto = "\n\n".join([doc.page_content for doc in resultados])
 
-        # 2. Construcción del prompt de sistema estricto
-        # El POR QUÉ de la estrictez: forzamos al modelo a no "imaginar" o usar
-        # conocimiento externo, garantizando respuestas solo de nuestros PDFs.
-        prompt_sistema = f"""
-            Eres Suriel, un asistente que responde SOLO con la información de la base de datos privada proporcionada a continuación. 
-            Tu objetivo es ser conciso y útil.
-            Si la respuesta NO está en el contexto, tu ÚNICA respuesta debe ser: "No tengo esa información".
+        # Paso 2: Aumento (Augmentation) - Crear el prompt con el rol y el contexto
+        prompt = f"""Eres Suriel, un asistente amable y servicial que responde SOLO con la información de la base de datos privada.
+Si la respuesta no está claramente en la base de datos, responde simplemente: "No tengo esa información en mi base de conocimiento actual."
+No inventes ni uses conocimiento externo.
 
-            Contexto relevante de la base de datos:
-            ---
-            {contexto}
-            ---
+Contexto relevante de la base de datos:
+{contexto}
 
-            Pregunta: {solicitud.mensaje}
-            Respuesta:
-        """
+Pregunta del usuario: {solicitud.mensaje}
+Respuesta:
+"""
 
-        # 3. Llamada a la API de Groq para la generación
-        respuesta_groq = cliente_groq.chat.completions.create(
-            # MODELO ACTUALIZADO: llama-3.1-8b-instant (reemplazo del anterior)
-            model="llama-3.1-8b-instant", 
+        # Paso 3: Generación (Generation) - Llamar al modelo de lenguaje
+        respuesta_llm = cliente_llm.chat.completions.create(
+            # ¡IMPORTANTE! El modelo ha sido actualizado para solucionar el error de "model decommissioned"
+            model="llama-3.1-8b-instant",
             messages=[
-                # Solo pasamos el prompt de sistema para mantener el enfoque estricto (RAG)
-                {"role": "system", "content": prompt_sistema},
-            ]
+                {"role": "system", "content": "Eres Suriel, un asistente amable y servicial."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.2, # Temperatura baja para respuestas más fácticas
         )
-        
-        respuesta = respuesta_groq.choices[0].message.content
-        
-        return {"respuesta": respuesta}
-    
+
+        respuesta_generada = respuesta_llm.choices[0].message.content
+
+        # Devolvemos la respuesta generada por el LLM
+        return {"respuesta": respuesta_generada}
+
     except Exception as e:
-        print(f"Error en el chat: {e}")
-        
-        # Manejo de errores específicos para Groq
-        error_message = str(e)
-        try:
-                # Intentamos parsear el mensaje de error para dar un detalle más útil al usuario
-                error_data = json.loads(error_message.split(" - ")[1].replace("'", "\""))
-                error_message = error_data.get('error', {}).get('message', str(e))
-        except:
-                pass
-                
-        # Si el error es por modelo, damos un mensaje claro
-        if "model_decommissioned" in str(e) or "invalid model" in str(e):
-                error_message = "El modelo de IA fue descontinuado o es inválido. Por favor, verificá el nombre del modelo en el código."
-        
-        raise HTTPException(status_code=500, detail=f"Error al generar la respuesta de IA: {error_message}")
+        # Capturamos la excepción para el debugging
+        print(f"Error en la ruta /chat: {e}")
+        # Retornamos un error HTTP amigable para el frontend
+        raise HTTPException(status_code=500, detail=f"Error interno al generar la respuesta: {e}")
+
+# Punto de inicio para Uvicorn si se ejecuta directamente
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=8000)
