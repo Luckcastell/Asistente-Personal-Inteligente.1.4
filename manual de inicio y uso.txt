@@ -44,24 +44,13 @@ El flujo de uso es simple:
       * Suriel te responderá usando solamente la información que cargaste en los PDFs. Si la información no está, dirá: "No tengo esa información".
 📚 Estructura de Carpetas
 Archivo/Carpeta
-	Descripción
-	backend/
-	Contiene el servidor (API) y la lógica de inteligencia artificial.
-	main.py
-	El archivo principal con FastAPI, la lógica RAG, y las rutas /upload y /chat.
-	.env
-	Almacena la clave secreta de Groq.
-	requirements.txt
-	Lista de librerías de Python.
-	vector_db/
-	Base de Datos de Vectores. Aquí ChromaDB guarda el contenido indexado de tus PDFs. Es persistente.
-	uploads/
-	Carpeta temporal donde se guardan los PDFs antes de ser procesados.
-	frontend/
-	Contiene la interfaz de usuario.
-	index.html
-	Estructura principal del chat.
-	script.js
-	Lógica de las llamadas al backend y manejo del chat.
-	styles.css
-	Estilos visuales del chat.
+	backend/				Contiene el servidor (API) y la lógica de inteligencia artificial.
+		main.py				El archivo principal con FastAPI, la lógica RAG, y las rutas /upload y /chat.
+		.env				Almacena la clave secreta de Groq.
+		requirements.txt	Lista de librerías de Python.
+	frontend/			Contiene la interfaz de usuario.
+		index.html			Estructura principal y estilos visuales del chat.
+		script.js			Lógica de las llamadas al backend y manejo del chat.
+	vector_db/			Base de Datos de Vectores. Aquí ChromaDB guarda el contenido indexado de tus PDFs. Es persistente.
+	uploads/			Carpeta temporal donde se guardan los PDFs antes de ser procesados.
+	
