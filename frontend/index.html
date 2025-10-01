@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Suriel | Asistente de Base Privada</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Ícono de chat para mejor UX -->
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%232a6f2e' d='M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2m-2 12H6v-2h12zm0-3H6V9h12zm0-3H6V6h12z'/%3E%3C/svg%3E">
+</head>
+<body>
+    <div class="chat-container">
+        <h1>🤖 Suriel (Base Privada)</h1>
+
+        <!-- Sección de Carga de Archivos -->
+        <div class="upload-section">
+            <label for="pdf-file" class="file-label">Cargar Documento PDF:</label>
+            <input type="file" id="pdf-file" accept="application/pdf">
+            <button onclick="uploadPDF()">Subir PDF</button>
+        </div>
+        <p id="upload-status" class="status-message"></p>
+
+        <!-- Caja de Conversación -->
+        <div id="chat-box" class="chat-box">
+            <div class="message bot">
+                <strong>Suriel:</strong> ¡Hola! Soy Suriel, tu asistente de conocimiento privado. Subí un PDF para empezar a consultarle.
+            </div>
+        </div>
+        
+        <!-- Entrada de Usuario -->
+        <div class="input-container">
+        <input id="user-input" type="text" placeholder="Haz una pregunta sobre tus documentos..." onkeypress="if(event.key === 'Enter') sendMessage()">
+        <button onclick="sendMessage()">Enviar</button>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>

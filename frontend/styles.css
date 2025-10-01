@@ -1,0 +1,179 @@
+/* Fuente global e inicialización */
+body {
+    font-family: 'Inter', sans-serif;
+    background: linear-gradient(135deg, #e0f7fa 0%, #b2ebf2 100%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    margin: 0;
+    padding: 20px;
+}
+
+/* Contenedor principal del chat */
+.chat-container {
+    background: white;
+    width: 90%;
+    max-width: 500px;
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+/* Título de la aplicación */
+h1 {
+    font-size: 1.5rem;
+    color: #00796b;
+    border-bottom: 2px solid #b2ebf2;
+    padding-bottom: 10px;
+    text-align: center;
+}
+
+/* Estilos de la sección de subida de archivos */
+.upload-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px;
+    border: 1px dashed #00bcd4;
+    border-radius: 8px;
+    background-color: #f7feff;
+}
+
+.file-label {
+    font-weight: bold;
+    color: #00796b;
+    font-size: 0.95rem;
+}
+
+/* Caja de mensajes */
+.chat-box {
+    height: 350px;
+    overflow-y: auto;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 15px;
+    background-color: #f9f9f9;
+    /* Estilo de la barra de desplazamiento */
+    scrollbar-width: thin;
+    scrollbar-color: #00bcd4 #f9f9f9;
+}
+
+.chat-box::-webkit-scrollbar {
+    width: 8px;
+}
+
+.chat-box::-webkit-scrollbar-thumb {
+    background-color: #00bcd4;
+    border-radius: 4px;
+}
+
+/* Mensajes individuales */
+.message {
+    padding: 10px 15px;
+    margin: 8px 0;
+    border-radius: 15px;
+    max-width: 80%;
+    line-height: 1.5;
+    word-wrap: break-word;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+}
+
+.user {
+    background-color: #00bcd4; /* Cian claro */
+    color: white;
+    margin-left: auto;
+    border-bottom-right-radius: 2px;
+}
+
+.bot {
+    background-color: #e0f2f1; /* Verde menta muy claro */
+    color: #37474f;
+    margin-right: auto;
+    border-bottom-left-radius: 2px;
+}
+
+/* Contenedor de entrada de texto y botón */
+.input-container {
+    display: flex;
+    gap: 10px;
+}
+
+input[type="text"], input[type="file"] {
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    flex-grow: 1;
+    font-size: 1rem;
+}
+
+button {
+    background-color: #00796b; /* Verde oscuro */
+    color: white;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: background-color 0.2s, transform 0.1s;
+}
+
+button:hover {
+    background-color: #004d40;
+}
+
+button:active {
+    transform: scale(0.98);
+}
+
+/* Mensajes de estado (carga, error) */
+.status-message {
+    text-align: center;
+    font-weight: bold;
+    font-size: 0.9rem;
+    min-height: 1.2rem;
+}
+
+.status-loading {
+    color: #ff9800; /* Naranja */
+}
+
+.status-success {
+    color: #2e7d32; /* Verde oscuro */
+}
+
+.status-error {
+    color: #d32f2f; /* Rojo */
+}
+
+/* Estilos de carga (loading) para el chat */
+.loading-message {
+    color: #78909c; /* Gris azulado */
+    font-style: italic;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 0.5; }
+    50% { opacity: 1; }
+    100% { opacity: 0.5; }
+}
+
+/* Adaptación para dispositivos pequeños (móviles) */
+@media (max-width: 600px) {
+    .chat-container {
+        width: 100%;
+        margin-top: 0;
+        border-radius: 0;
+        min-height: 100vh;
+    }
+    .input-container {
+        flex-direction: column;
+    }
+    input[type="text"], button {
+        width: 100%;
+    }
+}
