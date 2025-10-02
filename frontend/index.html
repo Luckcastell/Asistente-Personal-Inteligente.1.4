@@ -38,9 +38,14 @@
             color: #1e3a8a;
             font-size: 1.8rem;
             border-bottom: 2px solid #eff6ff;
-            padding-bottom: 10px;
+            padding-bottom: 5px;
+            margin: 5px 0;
+        }
+        h2 {
+            margin-bottom: 5px;
         }
         .upload-area {
+            height: 180px;
             display: flex;
             flex-direction: column;
             gap: 10px;
@@ -61,7 +66,7 @@
             background-color: #2563eb;
         }
         .chat-box {
-            height: 400px; /* Mayor altura para el historial */
+            height: 200px;
             overflow-y: auto;
             border: 1px solid #d1d5db;
             background-color: #ffffff;
@@ -130,19 +135,19 @@
         <h1>🤖 Suriel (Base Privada)</h1>
 
         <div class="upload-area">
-        <h2>1. Cargar Base de Conocimiento</h2>
-        <input type="file" id="archivo-pdf" accept="application/pdf" class="w-full p-2 border border-gray-300 rounded-md">
-        <button onclick="subirPDF()" id="btn-subir">Subir PDF e Indexar</button>
-        <p id="estado-subida" class="text-sm font-medium"></p>
+            <h2>Cargar Base de Conocimiento</h2>
+            <input type="file" id="archivo-pdf" accept="application/pdf" class="w-full p-2 border border-gray-300 rounded-md">
+            <button onclick="subirPDF()" id="btn-subir">Subir PDF e Indexar</button>
+            <p id="estado-subida" class="text-sm font-medium"></p>
         </div>
         
         <div id="chat-box" class="chat-box">
-        <div class="message bot"><strong>Suriel:</strong> ¡Hola! Soy Suriel, tu asistente personal. Cargá tus documentos PDF para que pueda empezar a responder tus preguntas basadas en ellos.</div>
+            <div class="message bot"><strong>Suriel:</strong> ¡Hola! Soy Suriel, tu asistente personal. Cargá tus documentos PDF para que pueda empezar a responder tus preguntas basadas en ellos.</div>
         </div>
         
         <div class="input-container">
-        <input id="entrada-usuario" type="text" placeholder="Hacé una pregunta sobre tus documentos..." onkeydown="if(event.key === 'Enter') enviarMensaje()">
-        <button onclick="enviarMensaje()">Enviar</button>
+            <input id="entrada-usuario" type="text" placeholder="Hacé una pregunta sobre tus documentos..." onkeydown="if(event.key === 'Enter') enviarMensaje()">
+            <button onclick="enviarMensaje()">Enviar</button>
         </div>
     </div>
 

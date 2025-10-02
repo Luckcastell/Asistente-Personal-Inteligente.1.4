@@ -5,8 +5,6 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.embeddings import HuggingFaceEmbeddings
-# Importamos Document para crear los trozos de memoria conversacional
-from langchain_core.documents import Document 
 from groq import Groq
 import os, shutil
 from dotenv import load_dotenv
@@ -28,9 +26,6 @@ cliente_llm = Groq(api_key=CLAVE_GROQ)
 DIRECTORIO_SUBIDAS = "uploads"
 DIRECTORIO_DB = "vector_db"
 
-# Constante para identificar y prefijar los trozos de memoria del chat
-PREFIJO_CHAT = "MEMORIA_CHAT: "
-
 # Crear directorios si no existen
 os.makedirs(DIRECTORIO_SUBIDAS, exist_ok=True)
 os.makedirs(DIRECTORIO_DB, exist_ok=True)
@@ -48,10 +43,10 @@ app.add_middleware(
 )
 
 # Inicializar Embeddings (función para convertir texto a vectores)
+# Se usa un modelo local de HuggingFace para evitar depender de APIs de embeddings
 embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
 # Inicializar ChromaDB (la base de datos de vectores) y cargar la base persistente
-# Esta base contendrá tanto los trozos de PDF como la memoria del chat
 vectorstore = Chroma(
     persist_directory=DIRECTORIO_DB,
     embedding_function=embeddings
@@ -75,6 +70,7 @@ def agregar_pdf_a_vectorstore(ruta_archivo: str):
         documentos = cargador.load()
 
         # Dividir el texto en trozos para la búsqueda precisa
+        # Un tamaño de 1000 y un solapamiento de 100 son comunes para RAG
         divisor_texto = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
         trozos = divisor_texto.split_documents(documentos)
 
@@ -91,17 +87,20 @@ def agregar_pdf_a_vectorstore(ruta_archivo: str):
 # --- Rutas de la API ---
 
 @app.post("/upload")
+# CAMBIO CLAVE: Cambiamos el nombre del parámetro de 'archivo' a 'file'
+# para que coincida con lo que envía el 'formData.append("file", ...)' del script.js
 async def subir_pdf(file: UploadFile = File(...)):
     """
     Ruta para subir un archivo PDF, guardarlo temporalmente y luego indexarlo.
     """
+    # Usamos 'file' en lugar de 'archivo'
     if file.content_type != "application/pdf":
         raise HTTPException(status_code=400, detail="Solo se permiten archivos PDF.")
 
     ruta_archivo = os.path.join(DIRECTORIO_SUBIDAS, file.filename)
 
     try:
-        # Guardar el archivo temporalmente
+        # Guardar el archivo temporalmente (usamos file.file)
         with open(ruta_archivo, "wb") as f:
             shutil.copyfileobj(file.file, f)
 
@@ -123,43 +122,22 @@ async def subir_pdf(file: UploadFile = File(...)):
 @app.post("/chat")
 async def chat(solicitud: SolicitudChat):
     """
-    Ruta para enviar un mensaje de chat, buscar contexto (documentos y memoria de chat)
-    y luego generar una respuesta.
+    Ruta para enviar un mensaje de chat, buscar contexto en la base de vectores y generar una respuesta.
     """
     try:
-        # Paso 1: Recuperación (Retrieval) - Buscar documentos MÁS historial de chat relevante
-        # Usamos k=5 para obtener más contexto, esperando capturar tanto documentos como turns de chat
-        resultados = vectorstore.similarity_search(solicitud.mensaje, k=5)
+        # Paso 1: Recuperación (Retrieval) - Buscar los 3 documentos más relevantes
+        resultados = vectorstore.similarity_search(solicitud.mensaje, k=3)
         
-        # Separar el contexto de documentos (PDFs) del contexto de conversación (memoria)
-        contexto_documentos = []
-        contexto_conversacion = []
-        
-        for doc in resultados:
-            # Si el contenido empieza con el prefijo, es un turno de chat anterior (memoria)
-            if doc.page_content.startswith(PREFIJO_CHAT):
-                # Limpiamos el prefijo para la inyección en el prompt
-                contexto_conversacion.append(doc.page_content.replace(PREFIJO_CHAT, ""))
-            else:
-                contexto_documentos.append(doc.page_content)
+        # Unir el contenido de los documentos recuperados en una sola cadena de contexto
+        contexto = "\n\n".join([doc.page_content for doc in resultados])
 
-        # Formatear el contexto para el prompt
-        contexto_doc_str = "\n\n".join(contexto_documentos)
-        contexto_chat_str = "\n".join(contexto_conversacion)
-        
-        # Paso 2: Aumento (Augmentation) - Crear el prompt mejorado con la memoria
+        # Paso 2: Aumento (Augmentation) - Crear el prompt con el rol y el contexto
         prompt = f"""Eres Suriel, un asistente amable y servicial que responde SOLO con la información de la base de datos privada.
 Si la respuesta no está claramente en la base de datos, responde simplemente: "No tengo esa información en mi base de conocimiento actual."
-No inventes ni uses conocimiento externo. Responde en español argentino.
+No inventes ni uses conocimiento externo.
 
----
-HISTORIAL DE CONVERSACIÓN RELEVANTE (Memoria del Chat):
-{contexto_chat_str if contexto_chat_str else "No hay historial relevante."}
----
-
-Contexto de Documentos (PDFs subidos):
-{contexto_doc_str}
----
+Contexto relevante de la base de datos:
+{contexto}
 
 Pregunta del usuario: {solicitud.mensaje}
 Respuesta:
@@ -167,6 +145,7 @@ Respuesta:
 
         # Paso 3: Generación (Generation) - Llamar al modelo de lenguaje
         respuesta_llm = cliente_llm.chat.completions.create(
+            # ¡IMPORTANTE! El modelo ha sido actualizado para solucionar el error de "model decommissioned"
             model="llama-3.1-8b-instant",
             messages=[
                 {"role": "system", "content": "Eres Suriel, un asistente amable y servicial."},
@@ -176,23 +155,6 @@ Respuesta:
         )
 
         respuesta_generada = respuesta_llm.choices[0].message.content
-
-        # Paso 4: Persistencia (Persistence) - Guardar el turno actual como memoria para futuras consultas
-        # Almacenamos la pregunta del usuario y la respuesta de Suriel en un solo trozo
-        turno_completo = f"USUARIO: {solicitud.mensaje}\nSURIEL: {respuesta_generada}"
-        
-        # Creamos un documento con el prefijo especial
-        documento_memoria = Document(
-            page_content=PREFIJO_CHAT + turno_completo, 
-            metadata={
-                "tipo": "chat_turn", 
-                "source": "Memoria del Chat"
-            }
-        )
-
-        # Agregamos el documento a la base y persistimos para que esté disponible inmediatamente
-        vectorstore.add_documents([documento_memoria])
-        vectorstore.persist()
 
         # Devolvemos la respuesta generada por el LLM
         return {"respuesta": respuesta_generada}
